@@ -9,7 +9,7 @@ from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.pdfbase import pdfmetrics
@@ -17,7 +17,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 
 # Настройка страницы
 st.set_page_config(
-    page_title="Калькулятор БЖУ v3.0",
+    page_title="Калькулятор БЖУ v3.0 - Кондитерская Прохорова",
     page_icon="🧁",
     layout="wide"
 )
@@ -96,6 +96,17 @@ def save_recipe_to_file(recipe_name, recipe_data, calculations):
 def create_recipe_pdf(recipe_name, recipe_data, calculations):
     """Создает красиво оформленный PDF с рецептом"""
     
+    # Регистрируем шрифты с поддержкой кириллицы
+    try:
+        pdfmetrics.registerFont(TTFont('DejaVuSans', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+        pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
+        font_regular = 'DejaVuSans'
+        font_bold = 'DejaVuSans-Bold'
+    except:
+        # Fallback на стандартные шрифты
+        font_regular = 'Times-Roman'
+        font_bold = 'Times-Bold'
+    
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, 
                            rightMargin=2*cm, leftMargin=2*cm,
@@ -104,7 +115,7 @@ def create_recipe_pdf(recipe_name, recipe_data, calculations):
     elements = []
     styles = getSampleStyleSheet()
     
-    # Стили
+    # Стили с поддержкой кириллицы
     title_style = ParagraphStyle(
         'CustomTitle',
         parent=styles['Heading1'],
@@ -112,7 +123,7 @@ def create_recipe_pdf(recipe_name, recipe_data, calculations):
         textColor=colors.HexColor('#2E86AB'),
         spaceAfter=30,
         alignment=TA_CENTER,
-        fontName='Helvetica-Bold'
+        fontName=font_bold
     )
     
     subtitle_style = ParagraphStyle(
@@ -121,7 +132,8 @@ def create_recipe_pdf(recipe_name, recipe_data, calculations):
         fontSize=10,
         textColor=colors.grey,
         alignment=TA_CENTER,
-        spaceAfter=20
+        spaceAfter=20,
+        fontName=font_regular
     )
     
     section_style = ParagraphStyle(
@@ -131,14 +143,15 @@ def create_recipe_pdf(recipe_name, recipe_data, calculations):
         textColor=colors.HexColor('#A23B72'),
         spaceAfter=12,
         spaceBefore=20,
-        fontName='Helvetica-Bold'
+        fontName=font_bold
     )
     
     normal_style = ParagraphStyle(
         'CustomNormal',
         parent=styles['Normal'],
         fontSize=11,
-        spaceAfter=10
+        spaceAfter=10,
+        fontName=font_regular
     )
     
     # === ЗАГОЛОВОК ===
@@ -166,7 +179,8 @@ def create_recipe_pdf(recipe_name, recipe_data, calculations):
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2E86AB')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, 0), font_bold),
+        ('FONTNAME', (0, 1), (-1, -1), font_regular),
         ('FONTSIZE', (0, 0), (-1, 0), 12),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
         ('GRID', (0, 0), (-1, -1), 1, colors.grey),
@@ -193,7 +207,8 @@ def create_recipe_pdf(recipe_name, recipe_data, calculations):
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#A23B72')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, 0), font_bold),
+        ('FONTNAME', (0, 1), (-1, -1), font_regular),
         ('FONTSIZE', (0, 0), (-1, 0), 12),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
         ('GRID', (0, 0), (-1, -1), 1, colors.grey),
@@ -222,7 +237,8 @@ def create_recipe_pdf(recipe_name, recipe_data, calculations):
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('ALIGN', (1, 1), (1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, 0), font_bold),
+        ('FONTNAME', (0, 1), (-1, -1), font_regular),
         ('FONTSIZE', (0, 0), (-1, 0), 11),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
         ('GRID', (0, 0), (-1, -1), 1, colors.grey),
@@ -258,7 +274,7 @@ def create_recipe_pdf(recipe_name, recipe_data, calculations):
         textColor=colors.grey,
         alignment=TA_CENTER
     )
-    elements.append(Paragraph("Новые десерты", footer_style))
+    elements.append(Paragraph("Кондитерская Прохорова", footer_style))
     elements.append(Paragraph("Расчет выполнен в Калькуляторе БЖУ v3.1", footer_style))
     
     # Генерируем PDF
@@ -612,5 +628,5 @@ with col2:
 
 # Футер
 st.markdown("---")
-st.markdown("*Расчет пищевой ценности v3.0*")
+st.markdown("*Кондитерская Прохорова - расчет пищевой ценности v3.0*")
 st.markdown("*Новое: сохранение рецептов, добавление новых ингредиентов*")
