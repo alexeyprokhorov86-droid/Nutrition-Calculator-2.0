@@ -3,6 +3,17 @@ import pandas as pd
 import json
 from datetime import datetime
 import os
+from io import BytesIO
+
+# Библиотеки для создания PDF
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.units import cm
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 # Настройка страницы
 st.set_page_config(
@@ -80,6 +91,181 @@ def save_recipe_to_file(recipe_name, recipe_data, calculations):
         json.dump(save_data, f, ensure_ascii=False, indent=2)
     
     return filename
+
+# Функция создания PDF рецепта
+def create_recipe_pdf(recipe_name, recipe_data, calculations):
+    """Создает красиво оформленный PDF с рецептом"""
+    
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, 
+                           rightMargin=2*cm, leftMargin=2*cm,
+                           topMargin=2*cm, bottomMargin=2*cm)
+    
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # Стили
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        textColor=colors.HexColor('#2E86AB'),
+        spaceAfter=30,
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold'
+    )
+    
+    subtitle_style = ParagraphStyle(
+        'Subtitle',
+        parent=styles['Normal'],
+        fontSize=10,
+        textColor=colors.grey,
+        alignment=TA_CENTER,
+        spaceAfter=20
+    )
+    
+    section_style = ParagraphStyle(
+        'Section',
+        parent=styles['Heading2'],
+        fontSize=16,
+        textColor=colors.HexColor('#A23B72'),
+        spaceAfter=12,
+        spaceBefore=20,
+        fontName='Helvetica-Bold'
+    )
+    
+    normal_style = ParagraphStyle(
+        'CustomNormal',
+        parent=styles['Normal'],
+        fontSize=11,
+        spaceAfter=10
+    )
+    
+    # === ЗАГОЛОВОК ===
+    elements.append(Paragraph("Рецепт кондитерского изделия", title_style))
+    elements.append(Paragraph(recipe_name, title_style))
+    elements.append(Paragraph(f"Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}", subtitle_style))
+    elements.append(Spacer(1, 0.5*cm))
+    
+    # === ОСНОВНЫЕ ПОКАЗАТЕЛИ ===
+    elements.append(Paragraph("Основные показатели", section_style))
+    
+    total_weight = calculations['общий_вес_г']
+    cost_recipe = calculations['стоимость']['за_рецепт_руб']
+    cost_kg = calculations['стоимость']['за_1кг_руб']
+    
+    main_data = [
+        ['Показатель', 'Значение'],
+        ['Общий вес', f"{total_weight:,.0f} г"],
+        ['Стоимость рецепта', f"{cost_recipe:,.2f} руб"],
+        ['Стоимость за 1 кг', f"{cost_kg:,.2f} руб/кг"],
+    ]
+    
+    main_table = Table(main_data, colWidths=[8*cm, 7*cm])
+    main_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2E86AB')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+        ('FONTSIZE', (0, 1), (-1, -1), 11),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')]),
+    ]))
+    elements.append(main_table)
+    elements.append(Spacer(1, 0.7*cm))
+    
+    # === БЖУ НА 100г ===
+    elements.append(Paragraph("Пищевая ценность на 100 г", section_style))
+    
+    bju = calculations['БЖУ_на_100г']
+    bju_data = [
+        ['Показатель', 'Значение'],
+        ['Белки', f"{bju['белки_г']:.2f} г"],
+        ['Жиры', f"{bju['жиры_г']:.2f} г"],
+        ['Углеводы', f"{bju['углеводы_г']:.2f} г"],
+        ['Калорийность', f"{bju['калории_кКал']:.1f} кКал"],
+    ]
+    
+    bju_table = Table(bju_data, colWidths=[8*cm, 7*cm])
+    bju_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#A23B72')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+        ('FONTSIZE', (0, 1), (-1, -1), 11),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')]),
+    ]))
+    elements.append(bju_table)
+    elements.append(Spacer(1, 0.7*cm))
+    
+    # === РЕЦЕПТУРА ===
+    elements.append(Paragraph("Рецептура", section_style))
+    
+    recipe_table_data = [['№', 'Ингредиент', 'Количество, г', '%']]
+    for idx, item in enumerate(recipe_data, 1):
+        percentage = (item['количество_г'] / total_weight * 100)
+        recipe_table_data.append([
+            str(idx),
+            item['ингредиент'],
+            f"{item['количество_г']:,.0f}",
+            f"{percentage:.1f}%"
+        ])
+    
+    recipe_table = Table(recipe_table_data, colWidths=[1.5*cm, 9*cm, 2.5*cm, 2*cm])
+    recipe_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F18F01')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('ALIGN', (1, 1), (1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#FFF8E1')]),
+    ]))
+    elements.append(recipe_table)
+    elements.append(Spacer(1, 0.7*cm))
+    
+    # === СОСТАВ ===
+    elements.append(Paragraph("Состав (ТР ТС 022/2011)", section_style))
+    composition_text = calculations.get('состав', 'Не указан')
+    elements.append(Paragraph(composition_text, normal_style))
+    elements.append(Spacer(1, 0.3*cm))
+    
+    # === АЛЛЕРГЕНЫ ===
+    elements.append(Paragraph("Аллергены", section_style))
+    allergens_text = calculations.get('аллергены', 'Не обнаружены')
+    allergen_style = ParagraphStyle(
+        'Allergen',
+        parent=normal_style,
+        textColor=colors.HexColor('#C1121F'),
+        fontSize=10
+    )
+    elements.append(Paragraph(allergens_text, allergen_style))
+    
+    # Футер
+    elements.append(Spacer(1, 1.5*cm))
+    footer_style = ParagraphStyle(
+        'Footer',
+        parent=styles['Normal'],
+        fontSize=8,
+        textColor=colors.grey,
+        alignment=TA_CENTER
+    )
+    elements.append(Paragraph("Новые десерты", footer_style))
+    elements.append(Paragraph("Расчет выполнен в Калькуляторе БЖУ v3.1", footer_style))
+    
+    # Генерируем PDF
+    doc.build(elements)
+    
+    buffer.seek(0)
+    return buffer
 
 # Инициализация данных
 try:
@@ -401,10 +587,20 @@ with col2:
                         'аллергены': allergens_text
                     }
                     
-                    # Сохраняем
-                    filename = save_recipe_to_file(recipe_name, recipe_data, calculations)
-                    st.success(f"✅ Рецепт '{recipe_name}' успешно сохранен!")
-                    st.info(f"📁 Файл: {filename}")
+                    # Создаем PDF
+                    pdf_buffer = create_recipe_pdf(recipe_name, recipe_data, calculations)
+                    
+                    st.success(f"✅ Рецепт '{recipe_name}' готов!")
+                    
+                    # Кнопка скачивания PDF
+                    st.download_button(
+                        label="📄 Скачать рецепт (PDF)",
+                        data=pdf_buffer,
+                        file_name=f"{recipe_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                        mime="application/pdf",
+                        type="primary",
+                        use_container_width=True
+                    )
         
         with col_clear:
             if st.button("🗑️ Очистить рецепт", type="secondary", use_container_width=True):
